@@ -1,4 +1,4 @@
-# **Automating Conference Schedule Extraction and Notifications**
+# **Automating Conference Schedule Notifications**
 
 
 ## **Case Study**
