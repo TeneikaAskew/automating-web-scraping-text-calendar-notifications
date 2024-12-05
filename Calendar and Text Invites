@@ -1,0 +1,121 @@
+function createCalendarEventsAndSendTexts() {
+  const sessionsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Python_Sessions");
+  const infoSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Info");
+  const calendar = CalendarApp.getDefaultCalendar();
+
+  // Fetch all data from the sheets
+  const sessionsData = sessionsSheet.getDataRange().getValues();
+  const infoData = infoSheet.getDataRange().getValues();
+
+  // Find indices of relevant columns
+  const dateIndex = sessionsData[0].indexOf("date");
+  const timeStartIndex = sessionsData[0].indexOf("time_start");
+  const timeEndIndex = sessionsData[0].indexOf("time_end");
+  const titleIndex = sessionsData[0].indexOf("title");
+  const descriptionIndex = sessionsData[0].indexOf("description");
+  const locationIndex = sessionsData[0].indexOf("location");
+  const planningToGoIndex = sessionsData[0].indexOf("Planning to Go?");
+  const readyToReceiveIndex = infoData[0].indexOf("Ready to Receive Invites and Texts?");
+  // Fetch the phone number from A3
+  const phoneNumber = infoSheet.getRange("B3").getValue(); // phone number is in cell A3
+  console.log(phoneNumber)
+  const textSentIndex =  sessionsData[0].indexOf("Text Sent");
+  const calInviteSentIndex = sessionsData[0].indexOf("Calendar Updated");
+
+  // Check if any user in the Info sheet is ready
+  const readyUsers = infoData.some(row => row[readyToReceiveIndex] === "Yes" || row[readyToReceiveIndex] === "Text Only" || row[readyToReceiveIndex] === "Calendar Only");
+
+  if (!readyUsers) {
+    Logger.log("No users are ready to receive invites. Exiting script.");
+    return;
+  } else {
+    Logger.log("Users are ready to receive invites. Continuing script.");
+  }
+
+  // Counter for the number of "Yes" rows processed
+  let yesCount = 0;
+
+  // Iterate over the Sessions sheet and create calendar events
+  for (let i = 1; i < sessionsData.length; i++) {
+    const row = sessionsData[i];
+    const title = row[titleIndex];
+    const date = row[dateIndex];
+    const startTime = row[timeStartIndex];
+    const endTime = row[timeEndIndex];
+    const location = row[locationIndex];
+    const description = row[descriptionIndex];
+    // console.log("Planning to go: " ,row[planningToGoIndex], " - Invite Created: ", row[calInviteSentIndex])
+    // console.log(row[planningToGoIndex] === "Yes" && row[calInviteSentIndex] === "Yes")
+    if (row[planningToGoIndex] === "Yes" && row[calInviteSentIndex] !== "Yes") {
+      yesCount++; // Increment the counter
+
+      // Error handling: Check for missing required fields
+      let missingFields = [];
+      if (!title) missingFields.push("Event Title");
+      if (!date) missingFields.push("Date");
+      if (!startTime) missingFields.push("Start Time");
+      if (!endTime) missingFields.push("End Time");
+
+      if (missingFields.length > 0) {
+        Logger.log(`Skipping row ${i + 1} due to missing fields: ${missingFields.join(", ")}`);
+        continue; // Skip to the next iteration
+      }
+
+      const parsedDate = new Date(date);
+      const [startHour, startMinute] = parseTime(startTime);
+      const [endHour, endMinute] = parseTime(endTime);
+
+      const startDate = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate(), startHour, startMinute);
+      const endDate = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate(), endHour, endMinute);
+
+      // Create the calendar event
+      calendar.createEvent(title, startDate, endDate, {
+        location: location,
+        description: description,
+      });
+      sessionsSheet.getRange(i + 1, calInviteSentIndex + 1).setValue("Yes");
+      Logger.log(`Event created: ${title} on ${startDate}`);
+    }
+  
+    console.log("Planning to go: " ,row[planningToGoIndex], " - Text Sent: ", row[textSentIndex])     
+    // console.log(row[planningToGoIndex] === "Yes" && !row[textSentIndex] === "Yes")
+    console.log(!row[textSentIndex] === "Yes")
+    if (row[planningToGoIndex] === "Yes" && row[textSentIndex] !== "Yes") {//add or for similarity match
+      if (phoneNumber) {
+        const message = `TG Summit: ${title} was added to your calendar. You'll receive a reminder 10 minutes before the session. Check your calendar for details!`;
+
+        // Send the email
+        MailApp.sendEmail({
+          to: phoneNumber,
+          subject: "Event Reminder",
+          body: message,
+        });
+
+        // Update the "Text Sent" column
+        sessionsSheet.getRange(i + 1, textSentIndex + 1).setValue("Yes");
+        Logger.log(`Text sent to ${phoneNumber} for row ${i + 1}`);
+      } else {
+        Logger.log(`No phone number found for row ${i + 1}. Skipping text.`);
+      }
+      Logger.log(`No interested sessions for row ${i + 1}. Skipping text.`);
+    }
+  }
+
+  // Log the total number of "Yes" rows processed
+  Logger.log(`Total event reminders created/sent: ${yesCount}`);
+}
+
+// Function to parse time strings like "1:45pm" into hour and minute
+function parseTime(timeString) {
+  const timeMatch = timeString.match(/(\d+):(\d+)([ap]m)/i);
+  if (!timeMatch) throw new Error(`Invalid time format: ${timeString}`);
+
+  let hour = parseInt(timeMatch[1], 10);
+  const minute = parseInt(timeMatch[2], 10);
+  const period = timeMatch[3].toLowerCase();
+
+  if (period === "pm" && hour < 12) hour += 12; // Convert PM to 24-hour time
+  if (period === "am" && hour === 12) hour = 0; // Handle midnight
+
+  return [hour, minute];
+}
