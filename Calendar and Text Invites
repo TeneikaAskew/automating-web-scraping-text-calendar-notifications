@@ -8,12 +8,12 @@ function createCalendarEventsAndSendTexts() {
   const infoData = infoSheet.getDataRange().getValues();
 
   // Find indices of relevant columns
-  const dateIndex = sessionsData[0].indexOf("date");
-  const timeStartIndex = sessionsData[0].indexOf("time_start");
-  const timeEndIndex = sessionsData[0].indexOf("time_end");
-  const titleIndex = sessionsData[0].indexOf("title");
-  const descriptionIndex = sessionsData[0].indexOf("description");
-  const locationIndex = sessionsData[0].indexOf("location");
+  const dateIndex = sessionsData[0].indexOf("Date");
+  const timeStartIndex = sessionsData[0].indexOf("Start Time");
+  const timeEndIndex = sessionsData[0].indexOf("End Time");
+  const titleIndex = sessionsData[0].indexOf("Title");
+  const descriptionIndex = sessionsData[0].indexOf("Description");
+  const locationIndex = sessionsData[0].indexOf("Location");
   const planningToGoIndex = sessionsData[0].indexOf("Planning to Go?");
   const readyToReceiveIndex = infoData[0].indexOf("Ready to Receive Invites and Texts?");
   // Fetch the phone number from A3
@@ -21,6 +21,28 @@ function createCalendarEventsAndSendTexts() {
   console.log(phoneNumber)
   const textSentIndex =  sessionsData[0].indexOf("Text Sent");
   const calInviteSentIndex = sessionsData[0].indexOf("Calendar Updated");
+
+    // Check if columns exist, add if they don't
+  let headerUpdated = false;
+
+  if (textSentIndex === -1) {
+    // "Text Sent" column doesn't exist, add it to the end
+    sessionsSheet.getRange(1, sessionsData[0].length + 1).setValue("Text Sent");
+    textSentIndex = sessionsData[0].length; // Update index to point to the new column
+    headerUpdated = true;
+  }
+
+  if (calInviteSentIndex === -1) {
+    // "Calendar Updated" column doesn't exist, add it to the end
+    sessionsSheet.getRange(1, sessionsData[0].length + (headerUpdated ? 2 : 1)).setValue("Calendar Updated");
+    calInviteSentIndex = sessionsData[0].length + (headerUpdated ? 1 : 0); // Update index to point to the new column
+    headerUpdated = true;
+  }
+
+  // If headers were updated, refetch the data to reflect the new columns
+  if (headerUpdated) {
+    sessionsData = sessionsSheet.getDataRange().getValues();
+  }
 
   // Check if any user in the Info sheet is ready
   const readyUsers = infoData.some(row => row[readyToReceiveIndex] === "Yes" || row[readyToReceiveIndex] === "Text Only" || row[readyToReceiveIndex] === "Calendar Only");
